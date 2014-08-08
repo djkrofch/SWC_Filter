@@ -38,7 +38,8 @@ myfx<- function (x){ sum(!is.na(x))} #function to account the number of values t
 
 ### Read in an example CSV containing raw SWC data from PJC
                         
-testData <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_control/soil data/PJ_2011_soil_complete_07242014.txt", sep = ",", header = TRUE)
+testData <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_control/PJC_soil_complete/PJ_2011_soil_complete_07242014.txt", sep = ",", header = TRUE)
+                       
 testData<-testData[2:17520,]            #only for 2011 data because:all soil_Year_complete datasets begin doy 1 00:30 and finish doy 365 or 366 at 23:30
 fluxAll  <- read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/Flux_all files/PJ_FLUX_all_2011_Dan.csv",header=T,sep = ",",dec=".")
                                         #all Flux_all files begin doy 1 00:00 and finish doy 365 or 366 at 23:30
@@ -73,7 +74,7 @@ matlab2POS = function(x, timez = "UTC") {
 timestamp <- matlab2POS(testData$timestamps)
 
 timestampDF <- data.frame(ts = timestamp, year =  timestamp$year + 1900, month = timestamp$mon,
-	mday = timestamp$mday, doy = timestamp$yday, 
+	mday = timestamp$mday, doy = (timestamp$yday)+1, 
 	hrmin = (timestamp$hour + timestamp$min / 60))
 	
 #Creating a matrix to record output files 
@@ -104,7 +105,7 @@ gapdata <- mat.or.vec(nrow(timestampDF), 1)   #mat.or.vec(nr,nc) creates and a z
 ####################STEP 1 (REMOVING OUT OF BOUNDS VALUES)###########################################
 ## Check for bad values (not yet NaN) and correct
 ## Given these are soil water data, set all values
-## greater than 1 and less than 0 to NaN
+## greater than 1 and less than 0 to NaN            
 ## Need to establish a flag here for out of bounds values
 currentCol[currentCol > 1] <- NaN
 currentCol[currentCol < 0] <- NaN
@@ -226,8 +227,8 @@ GAP_account[3,1+j]<-GAP_n_2
 
 #Saving results:
 
-write.csv(OUTPUT,paste('PJC_11_FilteredSWC1','.CSV',sep=','),row.names=TRUE)
-write.csv(GAP_account,paste('PJC_11_SWC_GapFilteraccounter','.CSV',sep=','),row.names=TRUE)
+write.csv(OUTPUT,paste('PJC_11_FilteredSWC_WS50','.CSV',sep=','),row.names=TRUE)
+write.csv(GAP_account,paste('PJC_11_SWC_GapFilteraccounter_WS50','.CSV',sep=','),row.names=TRUE)
 
 
 #######################
@@ -319,8 +320,8 @@ dev.off()
 #####################################################
 
 
-#tESTING WITH ONLY ONE COLUMN:
-df<-OUTPUT[,c(1,11)]
+#TESTING WITH ONLY ONE COLUMN:
+df<-OUTPUT[,c(1,6)]
 df$PRECIP<-fluxAll[2:nrow(fluxAll),ncol(fluxAll)]
  
 windowsize = 47                           #1 DAY WINDOW
@@ -328,6 +329,8 @@ var_df<-rep(NA,nrow(df))
 
 Q<-round(windowsize)                  #THE FIRST ROW INCLUDED IN WINDOW
 Z<-(round(nrow(df)-windowsize/2)-1)   #THE LAST ROW INCLUDED IN WINDOW
+
+#tRYING WITH STANDARD DEVIATION
 
 for (i in Q:Z){
 
@@ -342,8 +345,6 @@ var_df[i] <- sd(window[,2]) #use var() or standard error and pay with the best
 }
 
 }
-
-
 
 var_df_2<-ifelse( var_df >=(0.2*max(var_df,na.rm=T)),1,0)
 
