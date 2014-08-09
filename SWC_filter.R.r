@@ -330,7 +330,7 @@ var_df<-rep(NA,nrow(df))
 Q<-round(windowsize)                  #THE FIRST ROW INCLUDED IN WINDOW
 Z<-(round(nrow(df)-windowsize/2)-1)   #THE LAST ROW INCLUDED IN WINDOW
 
-#tRYING WITH STANDARD DEVIATION
+#TRYING WITH STANDARD DEVIATION
 
 for (i in Q:Z){
 
@@ -347,7 +347,6 @@ var_df[i] <- sd(window[,2]) #use var() or standard error and pay with the best
 }
 
 var_df_2<-ifelse( var_df >=(0.2*max(var_df,na.rm=T)),1,0)
-
 
 #tO CHECK quality acounter results
 
@@ -366,8 +365,95 @@ par(new=TRUE)
 plot(df[Tsubset,1],fluxAll[Tsubset,ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[2:nrow(fluxAll),ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
 
 
-#par(new=TRUE)
-#plot(df[Tsubset,1],var_df[Tsubset],col="green",type="h")#,ylim=c(0,0.005)
+
+#TRYING the diferential
+
+df<-OUTPUT[,c(1,6)]
+df$PRECIP<-fluxAll[2:nrow(fluxAll),ncol(fluxAll)]
+
+var_df<-rep(NA,nrow(df))
+var_df_2<-rep(NA,nrow(df))
+var_df_3<-rep(NA,nrow(df))
+LP<-rep(NA,nrow(df))
+
+#one
+
+for (i in 2:nrow(df)){
+
+    var_df[i]<-((df[i,2] - df[(i-1),2])*100 )/df[(i-1),2]
+
+                     }
+#two                     
+                     
+for (i in 25:nrow(df)){ 
+   
+    LP[i]<-sum(df[c((i-24):i),3],na.rm=T)
+    
+  if( LP[i]>0 & var_df[i]>0){   var_df_2[i]<-0 }                 #it rained in the last half day and SWC in decreasing
+    
+  else {var_df_2[i]<-var_df[i]}
+                      } 
+                      
+### three 
+df$row<-c(1:nrow(df))
+df[df$PRECIP==max(df$PRECIP,na.rm=T),]  #To find when the maximun reduction of SWC after the maximum rain  happened                     
+min(df[c(10299:10400),4]               # -0.5560834, to determine the maximun velocity of dry     
+
+                                  
+for (i in 48:nrow(df)){ 
+   
+    LP[i]<-sum(df[c((i-47):i),3],na.rm=T)
+#  if( LP[i]>0 & var_df_2[i]< (-0.56)){   var_df_3[i]<-1 }          # IF it rained in the last day and SWC is decreasing faster than the maximum real decrease after the maximum rain->BAD
+  if( LP[i]==0 & var_df_2[i]>0){   var_df_3[i]<-1 }                 # IF it didn't rain in the last day and SWC is increasing->BAD
+  if( LP[i]==0 & var_df_2[i]< (-0.56)){   var_df_3[i]<-1 }          # IF it didn't rain in the last day and SWC is decreasing faster than the maximum real decrease after the maximum rain->BAD
+
+  else {var_df_3[i]<-0}                                             #otherwise is OK
+                      }
+                      
+#second round                      
+  for (i in 48:nrow(df)){ 
+   
+    LP[i]<-sum(df[c((i-47):i),3],na.rm=T)
+  if( LP[i]>0 & var_df_2[i]< (-0.56)){   var_df_4[i]<-1 }          # IF it rained in the last day and SWC is decreasing faster than the maximum real decrease after the maximum rain->BAD
+    else {var_df_4[i]<-var_df_3[i]}                                             #otherwise is OK
+                      }
+
+ #tO CHECK quality acounter results
+
+par(mfrow=c(2,1))
+
+
+Tsubset<-c(1:nrow(df))  #For all data
+
+plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
+par(new=TRUE)
+plot(df[Tsubset,1],var_df[Tsubset],ylim=c(0,30),col="orange",type="h")#,ylim=c(0,0.005)
+par(new=TRUE)
+plot(df[Tsubset,1],var_df_2[Tsubset],col="green",type="h",ylim=c(0,30))#,ylim=c(0,0.005)
+
+
+plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
+par(new=TRUE)
+plot(df[Tsubset,1],var_df_3[Tsubset],ylim=c(0,1),col="purple",type="h")#,ylim=c(0,0.005)
+
+plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
+par(new=TRUE)
+plot(df[Tsubset,1],var_df_4[Tsubset],ylim=c(0,1),col="grey",type="h")#,ylim=c(0,0.005)
+
+par(new=TRUE)
+plot(df[Tsubset,1],fluxAll[Tsubset,ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[2:nrow(fluxAll),ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
+
+Tsubset<-c(9600:13007)  #For monsoon
+Tsubset<-c(10000:11000) #For monsoon MORE DETAIL
+Tsubset<-c(10299:10400) #For monsoon MORE DETAIL
+
+#CLEANING THE swc
+df$var_df_4<-var_df_4
+df$SWC_clean<-ifelse(df$var_df_4==1,NA,df$x36WC_P2_10_AVGH)
+
+Tsubset<-c(1:nrow(df))  #For all data
+plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
+points(df[Tsubset,1],df$SWC_clean,main=names(df)[2],col="pink")
 
 
 
