@@ -315,7 +315,7 @@ dev.off()
 
 ######################################################
 #####################################################
-### To built a noisy quality acounter after filter SWC (ws=50)
+### To built a noise quality acounter after filter SWC (ws=50)
 #####################################################
 #####################################################
 
@@ -348,6 +348,7 @@ var_df[i] <- sd(window[,2]) #use var() or standard error and pay with the best
 
 var_df_2<-ifelse( var_df >=(0.2*max(var_df,na.rm=T)),1,0)
 
+
 #tO CHECK quality acounter results
 
 par(mfrow=c(2,1))
@@ -374,7 +375,10 @@ df$PRECIP<-fluxAll[2:nrow(fluxAll),ncol(fluxAll)]
 var_df<-rep(NA,nrow(df))
 var_df_2<-rep(NA,nrow(df))
 var_df_3<-rep(NA,nrow(df))
-LP<-rep(NA,nrow(df))
+var_df_4<-rep(NA,nrow(df))
+var_df_5<-rep(NA,nrow(df))
+var_df_6<-rep(NA,nrow(df))
+LP<-rep(NA,nrow(df))  #LP=LAST PRECIPITATION
 
 #one
 
@@ -387,9 +391,9 @@ for (i in 2:nrow(df)){
                      
 for (i in 25:nrow(df)){ 
    
-    LP[i]<-sum(df[c((i-24):i),3],na.rm=T)
+    LP[i]<-sum(df[c((i-24):i),3],na.rm=T)              #RAIN IN THE LAST HALF A DAY
     
-  if( LP[i]>0 & var_df[i]>0){   var_df_2[i]<-0 }                 #it rained in the last half day and SWC in decreasing
+  if( LP[i]>0 & var_df[i]>0){   var_df_2[i]<-0 }       #if it rained in the last half day and SWC is increasing
     
   else {var_df_2[i]<-var_df[i]}
                       } 
@@ -405,22 +409,45 @@ for (i in 48:nrow(df)){
     LP[i]<-sum(df[c((i-47):i),3],na.rm=T)
 #  if( LP[i]>0 & var_df_2[i]< (-0.56)){   var_df_3[i]<-1 }          # IF it rained in the last day and SWC is decreasing faster than the maximum real decrease after the maximum rain->BAD
   if( LP[i]==0 & var_df_2[i]>0){   var_df_3[i]<-1 }                 # IF it didn't rain in the last day and SWC is increasing->BAD
-  if( LP[i]==0 & var_df_2[i]< (-0.56)){   var_df_3[i]<-1 }          # IF it didn't rain in the last day and SWC is decreasing faster than the maximum real decrease after the maximum rain->BAD
+  if(var_df_2[i]< (-0.56)){   var_df_3[i]<-1 }                      # the SWC can never be larger than the real maximum, if it is->BAD
 
   else {var_df_3[i]<-0}                                             #otherwise is OK
                       }
                       
 #second round                      
-  for (i in 48:nrow(df)){ 
+#  for (i in 48:nrow(df)){ 
    
-    LP[i]<-sum(df[c((i-47):i),3],na.rm=T)
-  if( LP[i]>0 & var_df_2[i]< (-0.56)){   var_df_4[i]<-1 }          # IF it rained in the last day and SWC is decreasing faster than the maximum real decrease after the maximum rain->BAD
-    else {var_df_4[i]<-var_df_3[i]}                                             #otherwise is OK
-                      }
+#    LP[i]<-sum(df[c((i-47):i),3],na.rm=T)
+#  if( LP[i]>0 & var_df_2[i]< (-0.56)){   var_df_4[i]<-1 }          # IF it rained in the last day and SWC is decreasing faster than the maximum real decrease after the maximum rain->BAD
+#    else {var_df_4[i]<-var_df_3[i]}                                             #otherwise is OK
+#                      }
+
+#four
+
+df$var_df_3<-var_df_3
+
+windowsize = 32                           #half a day WINDOW
+
+Q<-round(windowsize)                  #THE FIRST ROW INCLUDED IN WINDOW
+Z<-(round(nrow(df)-windowsize/2)-1)   #THE LAST ROW INCLUDED IN WINDOW
+
+#Depurating QC_indicator WITH STANDARD DEVIATION
+
+for (i in Q:Z){
+
+window <- df[(i - windowsize):i, ]
+      
+var_df_4[i] <- sd(window[,5]) #use var() or standard error over var_df_3
+
+}
+
+var_df_5<-ifelse( var_df_4 >=(0.49*max(var_df_4,na.rm=T)),1,0)
+var_df_6<-ifelse( var_df_4 >0,1,0)
+
 
  #tO CHECK quality acounter results
 
-par(mfrow=c(2,1))
+par(mfrow=c(4,1))
 
 
 Tsubset<-c(1:nrow(df))  #For all data
@@ -429,31 +456,100 @@ plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
 par(new=TRUE)
 plot(df[Tsubset,1],var_df[Tsubset],ylim=c(0,30),col="orange",type="h")#,ylim=c(0,0.005)
 par(new=TRUE)
-plot(df[Tsubset,1],var_df_2[Tsubset],col="green",type="h",ylim=c(0,30))#,ylim=c(0,0.005)
-
-
-plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
-par(new=TRUE)
 plot(df[Tsubset,1],var_df_3[Tsubset],ylim=c(0,1),col="purple",type="h")#,ylim=c(0,0.005)
 
 plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
 par(new=TRUE)
-plot(df[Tsubset,1],var_df_4[Tsubset],ylim=c(0,1),col="grey",type="h")#,ylim=c(0,0.005)
+plot(df[Tsubset,1],var_df_4[Tsubset],col="red",type="h")#,ylim=c(0,0.005)
+
+plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
+par(new=TRUE)
+plot(df[Tsubset,1],var_df_5[Tsubset],col="brown",type="h")#,ylim=c(0,0.005)
+
+plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
+par(new=TRUE)
+plot(df[Tsubset,1],var_df_6[Tsubset],col="pink",type="h")#,ylim=c(0,0.005)
 
 par(new=TRUE)
 plot(df[Tsubset,1],fluxAll[Tsubset,ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[2:nrow(fluxAll),ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
 
-Tsubset<-c(9600:13007)  #For monsoon
+Tsubset2<-c(9600:13007)  #For monsoon
 Tsubset<-c(10000:11000) #For monsoon MORE DETAIL
 Tsubset<-c(10299:10400) #For monsoon MORE DETAIL
 
+Tsubset<-c(5000:7000) #For spring
+
 #CLEANING THE swc
-df$var_df_4<-var_df_4
-df$SWC_clean<-ifelse(df$var_df_4==1,NA,df$x36WC_P2_10_AVGH)
+df$var_df_6<-var_df_6
+df$var_df_5<-var_df_5
+df$SWC_clean<-ifelse(df$var_df_6==1,NA,df$x36WC_P2_10_AVGH)
+df$SWC_clean2<-ifelse(df$var_df_5==1,NA,df$x36WC_P2_10_AVGH)
+
+par(mfrow=c(3,1))
 
 Tsubset<-c(1:nrow(df))  #For all data
-plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
-points(df[Tsubset,1],df$SWC_clean,main=names(df)[2],col="pink")
+Tsubset<-c(9600:13007)  #For monsoon
+Tsubset<-c(5000:7000) #For spring
+
+plot(df[Tsubset,1],df[Tsubset,2],ylim=c(0,0.5),main=names(df)[2])
+par(new=TRUE)
+plot(df[Tsubset,1],df$SWC_clean[Tsubset],,ylim=c(0,0.5),main=names(df)[2],col="brown")
+#par(new=TRUE)
+#plot(df[Tsubset,1],df$SWC_clean2[Tsubset],,ylim=c(0,0.5),main=names(df)[2],col="pink")
+par(new=TRUE)
+plot(df[Tsubset,1],fluxAll[Tsubset,ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[2:nrow(fluxAll),ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
+
+
+
+
+
+
+
+
+
+
+
+###more filtering 
+
+var_df_7<-rep(NA,nrow(df))
+MAX<-rep(NA,nrow(df))
+
+windowsize<-288                       #6 days
+Q<-round(windowsize)                  #THE FIRST ROW INCLUDED IN WINDOW
+Z<-(round(nrow(df)-windowsize/2)-1)
+
+for (i in Q:Z){
+
+window <- df[(i - windowsize), ]
+
+var_df_7[i] <-max(window[,8],na.rm=T)-df$SWC_clean[i] #use var() or standard error over var_df_3
+MAX[i] <-max(window[,8],na.rm=T)
+}
+
+var_df_8<-ifelse( var_df_7 >=(0.2*max(var_df_7,na.rm=T)),1,0)
+
+par(mfrow=c(3,1))
+
+Tsubset<-c(1:nrow(df))  #For all data
+Tsubset<-c(9600:13007)  #For monsoon
+Tsubset<-c(5000:7000) #For spring
+
+plot(df[Tsubset,1],var_df_7[Tsubset],main=names(df)[2],col="orange",type="h")
+par(new=TRUE)
+#plot(df[Tsubset,1],var_df_8[Tsubset],main=names(df)[2],col="red",type="h")
+#par(new=TRUE)
+plot(df[Tsubset,1],df$SWC_clean[Tsubset],,ylim=c(0,0.5),main=names(df)[2],col="pink")
+points(df[Tsubset,1],MAX[Tsubset],main=names(df)[2],col="purple",pch=8)
+
+#CLEANING THE swc again
+
+df$var_df_8<-var_df_8
+df$SWC_clean2<-ifelse(df$var_df_8==1,NA,df$x36WC_P2_10_AVGH)
+
+Tsubset=Tsubset1
+plot(df[Tsubset,1],df$SWC_clean[Tsubset],ylim=c(0,0.5),main=names(df)[2])
+par(new=TRUE)
+plot(df[Tsubset,1],df$SWC_clean2[Tsubset],ylim=c(0,0.5),main=names(df)[2],col="pink")
 
 
 
