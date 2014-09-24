@@ -20,9 +20,41 @@
 #  indicator that presents 3 different forms from less to more restrictive. This second 
 #  stage precises of manual decissions to be made in order to remove only problematic data.
 #  It generates OUTPUT 2.
-3
+
+#                  QC_dif (orange):  SWC(i)-SWC(i-1) *100/ SWC(i-1)       % of variation     (+ when SWC is increasing  and - when SWC is decreasing )
 #
-#
+#                  QC_2 (green): If it rained the last half a day and QC_diff is positive QC_2=0, otherwise QC_2= QC_diff
+
+#                  QC_3 (purple):
+#                      If  rain =0 (from last day) and QC_dif>0 ? QC_3= 1
+#                      If  SWC is decreasing more rapidly than the maximum REALISTIC SWC decreased (QC_2 >DRY MAX) ?  QC_3= 1
+#                      Otherwise ?QC_3= 0
+
+#                  QC_4 (red): standard deviation of QC_3 during a time window of ¾ of a day
+
+#                  QC_5(brown): if QC_4> 0.5 max(QC_4)?QC_5=1, Oherwise QC_5=0
+
+#                  QC_6(pink): if QC_4> 0 ?QC_6=1, Oherwise QC_6=0
+
+#   This script also includes one last section to estimate the daily means of SWC and also to gapfill the daily gaps when there
+#   was not rain during the gap and neither for the first and last day when SWC is available
+
+
+#    6 OUTPUT FILES:
+#        > OUTPUT1_name :  "SWC_site_year_Median_filtered_30min"
+#        > OUTPUT2_name: "SWC_site_year_REFINED_30min"
+#        > OUTPUT3_name: "SWC_site_year_REFINED_Daily"
+#        > OUTPUT4_name: "SWC_site_year_Refined&Gapfilled_Daily"
+#        > OUTPUT5_name: "SWC_site_year_Refined&Gapfilled_Daily_with_means"
+#         GAPS_SWC_PJC_20010"
+# 
+#    4 pdf DIAGNOSTIC PLOTS:
+#        > PLOT1_name: "PlotSWC_site_year_Median_filtered_30min"
+#        > PLOT2_name: "PlotSWC_site_year_REFINED_30min"
+#        > PLOT3_name: "PlotSWC_site_year_REFINED_Daily"
+#        > PLOT4_name: "PlotSWC_site_year_Refined&Gapfilled_Daily"
+
+        
 # For inquiries about this script's use or function, contact the authors at:
 #	Dan Krofcheck      krofcheck@gmail.com
 # Laura Morillas     laura.morillas.gonzalez@gmail.com
@@ -34,8 +66,8 @@
 
 SITES<-c("PJC","PJG")
 
-SITE.CODE<-1              #WRITE HERE THE CODE (1 for PJC, 2 for PJG) OF THE SITE TO PROCESS
-YEAR<-"2011"              #WRITE HERE THE YEAR OF YEARS OF DATA TO PROCESS
+SITE.CODE<-2              #WRITE HERE THE CODE (1 for PJC, 2 for PJG) OF THE SITE TO PROCESS
+YEAR<-"2010"              #WRITE HERE THE YEAR OF YEARS OF DATA TO PROCESS
 
 SITE<-SITES[SITE.CODE]
 LEVEL1<-"Median_filtered"
@@ -48,6 +80,7 @@ OUTPUT1_name<-paste("SWC",SITE,YEAR,LEVEL1,TSCALE1, sep="_")
 OUTPUT2_name<-paste("SWC",SITE,YEAR,LEVEL2,TSCALE1, sep="_")
 OUTPUT3_name<-paste("SWC",SITE,YEAR,LEVEL2,TSCALE2, sep="_")
 OUTPUT4_name<-paste("SWC",SITE,YEAR,LEVEL3,TSCALE2, sep="_")
+OUTPUT5_name<-paste("SWC",SITE,YEAR,LEVEL3,TSCALE2,"with_means", sep="_")
 
 PLOT1_name<-paste("PlotSWC",SITE,YEAR,LEVEL1,TSCALE1, sep="_")
 PLOT2_name<-paste("PlotSWC",SITE,YEAR,LEVEL2,TSCALE1, sep="_")
@@ -82,19 +115,92 @@ myfx<- function (x){ sum(!is.na(x))} #function to account the number of values t
 ################################################
 
 ### input file will be a CSV file containing raw SWC data 
-                        
-rawData <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/PJC_soil_complete/PJ_2011_soil_complete_07242014.txt", sep = ",", header = TRUE)
-#rawData <- read.table("C:/Users/David/Documents/Laura/SWC filtering/PJ_2011_soil_complete_07242014.txt", sep = ",", header = TRUE)
 
-rawData<-rawData[2:17520,]            #only for 2011 data because:all soil_Year_complete datasets begin doy 1 00:30 and finish doy 365 or 366 at 23:30
+#PJC 2009:
+rawData <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/PJC_soil_complete/PJ_2009_soil_complete.dat", sep = "\t", header = TRUE)
+fluxAll <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_control/Flux_all files/PJ_FLUX_all_2009.txt",sep = "\t", header = TRUE)
+fluxAll<-fluxAll[,c(1,3:165)]
+
+#PJC 2010:
+rawData <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/PJC_soil_complete/PJ_2010_soil_complete.dat", sep = "\t", header = TRUE)
+fluxAll <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_control/Flux_all files/PJ_FLUX_all_2010.txt",sep = "\t", header = TRUE)
+fluxAll<-fluxAll[1:nrow(fluxAll)-1,2:ncol(fluxAll)]
+
+
+#PJC 2011:
+rawData <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/PJC_soil_complete/PJ_2011_soil_complete_07242014.txt", sep = ",", header = TRUE)
+rawData<-PJC_rawData[2:17520,]            #only for 2011 data because:all soil_Year_complete datasets begin doy 1 00:30 and finish doy 365 or 366 at 23:30
 fluxAll  <- read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/Flux_all files/PJ_FLUX_all_2011_Dan.csv",header=T,sep = ",",dec=".")
-#fluxAll  <- read.csv("C:/Users/David/Documents/Laura/SWC filtering/PJ_FLUX_all_2011_Dan.csv",header=T,sep = ",",dec=".")
+fluxAll<-PJC_fluxAll[2:nrow(fluxAll),]
+
+
+#PJC 2012:
+rawData <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/PJC_soil_complete/PJ_2012_soil_complete_07242014.txt", sep = ",", header = TRUE)
+rawData<-rawData[2:17568,]            #only for 2011 data because:all soil_Year_complete datasets begin doy 1 00:30 and finish doy 365 or 366 at 23:30
+
+fluxAll<- read.table("C:/Users/Laura Morillas/Documents/data/PJ_control/Flux_all files/PJ_FLUX_all_2012.txt",sep ="\t", header = TRUE)
+fluxAll<- fluxAll[1:17567,1:152]
+
+
+#PJC 2013:
+rawData <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/PJC_soil_complete/PJ_2013_soil_complete - Randy_Lauracompleted.txt", sep = "\t", header = TRUE)
+
+fluxAll  <- read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/Flux_all files/PJ_FLUX_all_2013.txt",header=T,sep = "\t",dec=".")
+fluxAll<-fluxAll[2:nrow(fluxAll),1:152]
+
+
+
+#PJG 2011:
+FLUX_SOIL<-read.table("C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/From bandage script/PJ_girdle_2011_corrected_tstamps_23x_fluxall.dat", sep = "\t", header = TRUE) #sep = "\t" means separated by Tab
+rawData<-FLUX_SOIL[1:(nrow(FLUX_SOIL)-1),162:ncol(FLUX_SOIL)]   #to have only data coming from CR23X (FROM COLUMN 162 OF THE ORIGINAL FILE) including data doy 1 00:30 and finish doy 365 or 366 at 23:30 
+                                                             # (original soil complete time columns) 
+            
+                                                           
+fluxAll <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_guirdled/Flux_all files/PJ_girdle_FLUX_all_2011.txt",sep = "\t", header = TRUE)
+fluxAll<-fluxAll[1:nrow(fluxAll)-1,]   # To have Fux all file from doy 1 00:30 and finish doy 365 or 366 at 23:30 
+#We need some PJC 2011 DATA TO SUPPORT pjg 2011 DATA.....BECAUSE TIMESTAMP AT PJG IS NOT OK
+PJC_rawData <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/PJC_soil_complete/PJ_2011_soil_complete_07242014.txt", sep = ",", header = TRUE)
+PJC_rawData<-PJC_rawData[2:17520,]            #only for 2011 data because:all soil_Year_complete datasets begin doy 1 00:30 and finish doy 365 or 366 at 23:30
+PJC_fluxAll  <- read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/Flux_all files/PJ_FLUX_all_2011_Dan.csv",header=T,sep = ",",dec=".")
+PJC_fluxAll<-PJC_fluxAll[2:nrow(PJC_fluxAll),]
+
+
+#PJG 2009:
+rawData <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/PJG_soil_complete/PJ_girdle_2009_soil_complete.dat", sep = "\t", header = TRUE)
+fluxAll <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_guirdled/Flux_all files/PJ_girdle_FLUX_all_2009.txt",sep ="\t", header = TRUE)
+fluxAll<-fluxAll[,2:159]
+rawData[,1]<-PJC_rawData[,1]
+
+
+
+#PJG 2010:
+FLUX_SOIL<-read.table("C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/From bandage script/PJ_girdle_2010_corrected_tstamps_23x_fluxall.dat", sep = "\t", header = TRUE) #sep = "\t" means separated by Tab
+rawData<-FLUX_SOIL[1:(nrow(FLUX_SOIL)-1),162:ncol(FLUX_SOIL)]   #to have only data coming from CR23X (FROM COLUMN 162 OF THE ORIGINAL FILE) including data doy 1 00:30 and finish doy 365 or 366 at 23:30 
+#timestampDF<- rawData[,2:4]
+
+fluxAll <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_guirdled/Flux_all files/PJ_girdle_FLUX_all_2010.txt",sep = "\t", header = TRUE)
+fluxAll<-fluxAll[1:nrow(fluxAll)-1,]   # To have Fux all file from doy 1 00:30 and finish doy 365 or 366 at 23:30 
+
+
+#PJG 2012  (Leap Year):
+FLUX_SOIL<-read.table("C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/From bandage script/PJ_girdle_2012_corrected_tstamps_23x_fluxall.dat", sep = "\t", header = TRUE) #sep = "\t" means separated by Tab
+rawData<-FLUX_SOIL[,161:ncol(FLUX_SOIL)]   #to have only data coming from CR23X (FROM COLUMN 162 OF THE ORIGINAL FILE) including data doy 1 00:30 and finish doy 365 or 366 at 23:30 
+
+
+fluxAll <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_guirdled/Flux_all files/PJ_girdle_FLUX_all_2012.txt",sep = "\t", header = TRUE)
+fluxAll[,ncol(fluxAll)]<-FLUX_SOIL$rain_Tot     #Because Rain_tot in  PJ_girdle_FLUX_all_2012.txt is wrong
+
+PJC_rawData <- read.table("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/PJC_soil_complete/PJ_2012_soil_complete_07242014.txt", sep = ",", header = TRUE)
+PJC_rawData<-PJC_rawData[2:17568,]            #only for 2011 data because:all soil_Year_complete datasets begin doy 1 00:30 and finish doy 365 or 366 at 23:30
+
 
                                         #all Flux_all files begin doy 1 00:00 and finish doy 365 or 366 at 23:30
                                         
+
 ### Select only the columns that contain SWC content. Searching here for *WC* as output
 ### by the CR23x. Also include the matlab datenum timestamp for POSIX conversion
 rawData <- rawData[, c(1, grep("WC", names(rawData)))] #grep functions look for the colnames that includes "WC"
+#PJC_rawData<-PJC_rawData[, c(1, grep("WC", names(PJC_rawData)))]
 
 ### Include precipitation in the working dataset (from flux all files): 
 #rawData$PRECIP<-fluxAll[2:nrow(fluxAll),ncol(fluxAll)]   #This will work always because soil_Year_complete datasets begin doy 1 00:30 and finish doy 365 or 366 at 23:30 
@@ -119,20 +225,36 @@ matlab2POS = function(x, timez = "UTC") {
 			tz = 'UTC', usetz = FALSE), tz = timez))
 }
 
+
+#For PJC 2011 :
 timestamp <- matlab2POS(rawData$timestamps)
+timestamp <- matlab2POS(PJC_rawData$timestamps)
+#timestamp <- matlab2POS(rawData$tstamps)           # because timestamps in this datafile is  "tstamps"    matlab2POS doesn't work with PJG timestamps from the file "PJ_girdle_2011_corrected_tstamps_23x_fluxall.dat" at PJG 
+                                                    #test_timestamp<-matlab2POS(Fluxsoil$timestamp)      #This is exaclty wrong than timestamp <- matlab2POS(rawData$tstamps) (using the 2 first columns of"PJ_girdle_2011_corrected_tstamps_23x_fluxall.dat")
+                                                    #test2_timestamp<-matlab2POS(Fluxsoil$timestamp2)    #This is exaclty wrong than timestamp <- matlab2POS(rawData$tstamps) (using the 2 first columns of"PJ_girdle_2011_corrected_tstamps_23x_fluxall.dat")                                       
+#For PJG 2011 ( UGLY BANDAGE):
+PJC_timestamp <- matlab2POS(PJC_rawData$timestamps)
+timestamp <- PJC_timestamp 
+rawData$tstamps <- PJC_rawData$timestamps
+
+
 
 timestampDF <- data.frame(ts = timestamp, year =  timestamp$year + 1900, month = timestamp$mon+1,
 	mday = timestamp$mday, doy = (timestamp$yday)+1, 
 	hrmin = round((timestamp$hour + timestamp$min / 60),digits = 1))
 	
 
-
+##########################################
+# CREATING OUTPUT FILE
+#
 #Creating a matrix to record output files 
+##########################################
+
 
 OUTPUT0<- mat.or.vec(nrow(timestampDF), nc=length(names(rawData)))
 OUTPUT<-data.frame(OUTPUT0)
 names(OUTPUT)<-names(rawData[,c(1:dim(rawData)[2])])
-OUTPUT[,1]<-rawData$timestamp
+OUTPUT[,1]<-rawData[,1]
 
 GAP_account0<- mat.or.vec(nr=6, nc=length(names(rawData)))
 GAP_account<-data.frame(GAP_account0)
@@ -146,7 +268,7 @@ GAP_account[,1]<-c("Raw without out of bounds","Gaps 1.5 hours filled","After Me
 #######################################################
 #######################################################
 #
-# FIRDT STAGE: MEDIAN FILTER and general thresholds
+# FIRST STAGE: MEDIAN FILTER and general thresholds
 #
 #######################################################
 #######################################################
@@ -284,9 +406,15 @@ GAP_account[3,1+j]<-GAP_n_2
 
 }
 
+OUTPUT<-cbind(timestampDF[,2:ncol(timestampDF)],OUTPUT)
+
 
 #Saving results:
+#PJC
 setwd('C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS')
+
+#PJG
+#setwd('C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS')
 
 write.csv(OUTPUT,paste(OUTPUT1_name,'.CSV',sep=''),row.names=TRUE)
 write.csv(GAP_account,paste(GAP_name,'.CSV',sep=''),row.names=TRUE)
@@ -296,13 +424,18 @@ write.csv(GAP_account,paste(GAP_name,'.CSV',sep=''),row.names=TRUE)
 ##########################
 #Ploting results STAGE 1:
 ##########################
-
+OUTPUT<-OUTPUT[,6:ncol(OUTPUT)]
 
 #AUTOMATED LOOP TO SAVE THE diagnostic plots PLOTS
  dev.off()
  dev.off()
-                        
-pdf(file = "C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/PlotSWC_PJC_2011_Median_filtered_30min.pdf")
+
+PLOT1_name
+#PJC:                        
+pdf(file = "C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/PlotSWC_PJC_2013_Median_filtered_30min.pdf")
+#PJG:
+#pdf(file = "C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS/PlotSWC_PJG_2009_Median_filtered_30min.pdf")
+
 par(mfrow=c(3,1),mar=c(2, 4, 2, 0.5),oma=c(2,0,2,4))
 
 for( i in 2:ncol(rawData)) {
@@ -310,8 +443,8 @@ for( i in 2:ncol(rawData)) {
 plot(timestampDF[,5],rawData[,i],type="l",lwd=2,ylim=c(0,0.5),ylab="SWC",xlab="DOY",main=names(rawData)[i])
 lines(timestampDF[,5],OUTPUT[,i],type="l",col="red",lwd=2)
 par(new=TRUE)                                                                           #This is to create a secondary axis in the same plot
-plot(timestampDF[,5],fluxAll[2:nrow(fluxAll),ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[2:nrow(fluxAll),ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
-Yincrease<-(max(fluxAll[2:nrow(fluxAll),ncol(fluxAll)],na.rm=T))/4  
+plot(timestampDF[,5],fluxAll[,ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[,ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
+Yincrease<-(max(fluxAll[,ncol(fluxAll)],na.rm=T))/4  
 axis( side=4)
 mtext("Precip",side=4,line=3,cex=0.8)                                                                           #4 means that the rain axis is going to be writen in the right hand of the plot
 legend("topleft",col=c("black","red","blue"),lty=1,legend=c("raw SWC","Filtered SWC","Precipitation"))
@@ -353,8 +486,8 @@ dev.off()
 #        lines(timestampDF_col[Tsubset,7],OUTPUT_WS100[Tsubset,i],pch=4,cex=0.3 ,type="p",col="orange",lwd=2)
 #        lines(timestampDF_col[Tsubset,7],OUTPUT_WS150[Tsubset,i],pch=4,cex=0.3 ,type="p",col="red",lwd=2)
 #        par(new=TRUE)                                                                           #This is to create a secondary axis in the same plot
-#        plot(timestampDF_col[Tsubset,7],fluxAll[Tsubset,ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[2:nrow(fluxAll),ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
-#        Yincrease<-(max(fluxAll[2:nrow(fluxAll),ncol(fluxAll)],na.rm=T))/4  
+#        plot(timestampDF_col[Tsubset,7],fluxAll[Tsubset,ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[,ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
+#        Yincrease<-(max(fluxAll[,ncol(fluxAll)],na.rm=T))/4  
 #        axis( side=4)
 #        mtext("Precip",side=4,line=3,cex=0.8)                                                                           #4 means that the rain axis is going to be writen in the right hand of the plot
 #        legend("topright",col=c("black","pink","green","purple","orange","red","blue"),lty=1,legend=c("raw SWC","Filtered SWC WS30","Filtered SWC WS50"
@@ -393,33 +526,42 @@ dev.off()
 OUTPUT_NEW<- mat.or.vec(nrow(OUTPUT), nc=length(names(OUTPUT)))
 OUTPUT2<-data.frame(OUTPUT_NEW)
 names(OUTPUT2)<-names(OUTPUT)
-OUTPUT2[,1]<-OUTPUT[,1]
+OUTPUT2[,1]<-OUTPUT[,1]    #PJC_rawData$timestamps IN CASE THAT OUTPUT[,1] is a constant value or a daily value
+                           #For PJC2009 :OUTPUT2[,1]<-PJC_rawData$timestamps
+
 
 #If you already filtered some of the probes
-OUTPUT2<-read.csv("C:/Users/Laura Morillas/Documents/R/SWC filtering/PJC_11_Filtered2SWC_WS50,.csv",header=T,sep = ",",dec=".")
 
+#PJC
+#OUTPUT2<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/SWC_PJC_2010_REFINED_30min.csv",header=T,sep = ",",dec=".")
+#OUTPUT2<-OUTPUT2[,2:ncol(OUTPUT2)]
+#PJG
+OUTPUT2<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/SWC_PJC_2013_REFINED_30min.csv",header=T,sep = ",",dec=".")
+OUTPUT2<-OUTPUT2[,2:ncol(OUTPUT2)]
 
 #This check has to be done probe by probe
 
 #TRYING the diferential
 
-probe=7  #change this one by one  (FROM 2 TO 28) 
+probe=23   #change this one by one  (FROM 2 TO 28) 
 df<-OUTPUT[,c(1,probe)]
-df$PRECIP<-fluxAll[2:nrow(fluxAll),ncol(fluxAll)]
+df$PRECIP<-fluxAll[,ncol(fluxAll)]
+head(df)
 
-var_df<-rep(NA,nrow(df))
-var_df_2<-rep(0,nrow(df))
-var_df_3<-rep(0,nrow(df))
-var_df_4<-rep(0,nrow(df))
-var_df_5<-rep(0,nrow(df))
-var_df_6<-rep(0,nrow(df))
+
+QC_dif <-rep(NA,nrow(df))
+QC_2<-rep(0,nrow(df))
+QC_3<-rep(0,nrow(df))
+QC_4<-rep(0,nrow(df))
+QC_5<-rep(0,nrow(df))
+QC_6<-rep(0,nrow(df))
 LP<-rep(NA,nrow(df))  #LP=LAST PRECIPITATION
 
 ###one
 
 for (i in 2:nrow(df)){
 
-    var_df[i]<-((df[i,2] - df[(i-1),2])*100 )/df[(i-1),2]
+    QC_dif[i]<-((df[i,2] - df[(i-1),2])*100 )/df[(i-1),2]
 
                      }
 ###two                     
@@ -427,31 +569,36 @@ for (i in 2:nrow(df)){
 for (i in 25:nrow(df)){ 
    
     LP[i]<-sum(df[c((i-24):i),3],na.rm=T)              #RAIN IN THE LAST HALF A DAY
+  
+  ifelse(is.na(LP[i])==T | is.na(QC_dif[i])==T,QC_2[i]<-0,ifelse(LP[i]>0 & QC_dif[i]>0,QC_2[i]<-0, QC_2[i]<-QC_dif[i] ))  
+
+#  if(is.na(LP[i])==T | is.na(QC_dif[i])==T) {QC_2[i]<-0}
+#  if( LP[i]>0 & QC_dif[i]>0){   QC_2[i]<-0 }       #if it rained in the last half a day and SWC is increasing
     
-  if( LP[i]>0 & var_df[i]>0){   var_df_2[i]<-0 }       #if it rained in the last half day and SWC is increasing
-    
-  else {var_df_2[i]<-var_df[i]}
+#  else {QC_2[i]<-QC_dif[i]}
                       } 
                       
 ### three
 
 #To determine the maximum real drying speed: 
 df$row<-c(1:nrow(df))
-df$var_df<-var_df
+df$QC_dif<-QC_dif
 
 #To select the drying period we trust
+dev.off()
 Tsubset<-c(1:nrow(df))   #Tsubset has to be determine manually for the moment
 plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2],ylim=c(0,0.5))
 par(new=TRUE)
-plot(df[Tsubset,1],fluxAll[Tsubset,ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[2:nrow(fluxAll),ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
+plot(df[Tsubset,1],fluxAll[Tsubset,ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[,ncol(fluxAll)],na.rm=T)))
+
 
 #To detect the observation when maximum rain occurs:
-max(df[df$PRECIP==max(df$PRECIP,na.rm=T),4],na.rm=T)  #To find when the maximun reduction of SWC after the maximum rain  happened                     
-
-Tsubset<-c(10299:10400)   #Tsubset has to be determine manually for the moment
+T_Pmax<-max(df[df$PRECIP==max(df$PRECIP,na.rm=T),4],na.rm=T)  #To find when the maximun reduction of SWC after the maximum rain  happened                     
+T_Pmax
+Tsubset<-c(5200:14800)   #Tsubset has to be determine manually for the moment
 plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
 par(new=TRUE)
-plot(df[Tsubset,1],fluxAll[Tsubset,ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[2:nrow(fluxAll),ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
+plot(df[Tsubset,1],fluxAll[Tsubset,ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[,ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
 
 Drymax<-min(df[Tsubset,5],na.rm=T)  # -0.5560834, to determine the maximun velocity of dry     
 Drymax
@@ -459,17 +606,18 @@ Drymax
 for (i in 48:nrow(df)){ 
    
     LP[i]<-sum(df[c((i-47):i),3],na.rm=T)
-#  if( LP[i]>0 & var_df_2[i]< (-0.56)){   var_df_3[i]<-1 }          # IF it rained in the last day and SWC is decreasing faster than the maximum real decrease after the maximum rain->BAD
-  if( LP[i]==0 & var_df_2[i]>0){   var_df_3[i]<-1 }                 # IF it didn't rain in the last day and SWC is increasing->BAD
-  if(var_df_2[i]< Drymax){   var_df_3[i]<-1 }                      # the SWC can never be larger than the real maximum, if it is->BAD
+    
+  if(is.na(LP[i])==T | is.na(QC_dif[i])==T) {QC_3[i]<-0}
+  if( LP[i]==0 & QC_2[i]>0){   QC_3[i]<-1 }                 # IF it didn't rain in the last day and SWC is increasing->BAD
+  if(QC_2[i]< Drymax){   QC_3[i]<-1 }                      # the SWC can never be dry faster than the real maximum drying speed (Drymax), if it is->BAD
 
-  else {var_df_3[i]<-0}                                             #otherwise is OK
+  else {QC_3[i]<-0}                                             #otherwise is OK
                       }
                       
 
 ####four
 
-df$var_df_3<-var_df_3
+df$QC_3<-QC_3
 
 windowsize = 32                           #half a day WINDOW
 
@@ -482,25 +630,29 @@ for (i in Q:Z){
 
 window <- df[(i - windowsize):i, ]
       
-var_df_4[i] <- sd(window[,6]) #use var() or standard error over var_df_3
+QC_4[i] <- sd(window[,6]) #use var() or standard error over QC_3
 
 }
 
-var_df_5<-ifelse( var_df_4 >=(0.49*max(var_df_4,na.rm=T)),1,0)
-var_df_6<-ifelse( var_df_4 >0,1,0)
+QC_5<-ifelse( QC_4 >=(0.49*max(QC_4,na.rm=T)),1,0)
+QC_6<-ifelse( QC_4 >0,1,0)
 
-df$var_df_6<-var_df_6
-df$var_df_5<-var_df_5
+df$QC_6<-QC_6
+df$QC_5<-QC_5
 
 
 #TO CHECK QC indicators
 
+
 Tsubset<-c(1:nrow(df))  #For all data
-Tsubset<-c(9600:13007)  #For monsoon
+Tsubset<-c(11000:13007)  #For monsoon
+Tsubset<-c((T_Pmax-10):11500)  #For monsoon reduced
 Tsubset<-c(5000:7000) #For spring
-Tsubset<-c(1:5000) #For beginning of year
-Tsubset<-c(15000:17519) #For the year's end
-Tsubset<-c(16848:17519)
+Tsubset<-c(1000:4500) #For beginning of year
+Tsubset<-c(14000:17519) #For the year's end
+Tsubset<-c(16150:16270)
+Tsubset<-c(1000:4000) #For beginning of year
+Tsubset<-c(7000:8000)
 
 par(mfrow=c(4,1))
 
@@ -508,22 +660,22 @@ plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2],col="red",ylim=c(0,0.5))
 par(new=TRUE)
 plot(df[Tsubset,1],rawData[Tsubset,probe],type="l",lwd=2,ylim=c(0,0.5))
 par(new=TRUE)
-plot(df[Tsubset,1],var_df[Tsubset],ylim=c(0,30),col="orange",type="h")#,ylim=c(0,0.005)
+plot(df[Tsubset,1],QC_dif[Tsubset],ylim=c(0,30),col="orange",type="h")#,ylim=c(0,0.005)
 par(new=TRUE)
-plot(df[Tsubset,1],var_df_3[Tsubset],ylim=c(0,1),col="purple",type="h")#,ylim=c(0,0.005)
+plot(df[Tsubset,1],QC_3[Tsubset],ylim=c(0,1),col="purple",type="h")#,ylim=c(0,0.005)
 par(new=TRUE)
 plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2],,col="red",ylim=c(0,0.5))
 
 
 plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
 par(new=TRUE)
-plot(df[Tsubset,1],var_df_4[Tsubset],col="red",type="h")#,ylim=c(0,0.005)
+plot(df[Tsubset,1],QC_4[Tsubset],col="red",type="h")#,ylim=c(0,0.005)
 par(new=TRUE)
 plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
 
 plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
 par(new=TRUE)
-plot(df[Tsubset,1],var_df_5[Tsubset],col="brown",type="h")#,ylim=c(0,0.005)
+plot(df[Tsubset,1],QC_5[Tsubset],col="brown",type="h")#,ylim=c(0,0.005)
 par(new=TRUE)
 plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
 par(new=TRUE)
@@ -532,7 +684,7 @@ plot(df[Tsubset,1],fluxAll[Tsubset,ncol(fluxAll)],type="h",col="blue",xaxt="n",y
 
 plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
 par(new=TRUE)
-plot(df[Tsubset,1],var_df_6[Tsubset],col="pink",type="h")#,ylim=c(0,0.005)
+plot(df[Tsubset,1],QC_6[Tsubset],col="pink",type="h")#,ylim=c(0,0.005)
 par(new=TRUE)
 plot(df[Tsubset,1],df[Tsubset,2],main=names(df)[2])
 
@@ -554,61 +706,119 @@ dev.off()
     
 #####Cleaning:
 
-    df$SWC_clean<-ifelse(df$var_df_5==1,NA,df[,2])
-    #df$SWC_clean2<-ifelse(df$var_df_6==1,NA,df[,2])  #For comparison using diferent QC indicator
+    df$SWC_clean<-ifelse(df$QC_5==1,NA,df[,2])
+    #df$SWC_clean2<-ifelse(df$QC_6==1,NA,df[,2])  #For comparison using diferent QC indicator
 
     #USING DIFERENT QC INDICATOR DEPENDING ON THE PERIOD
-    df$SWC_clean5<-ifelse(df$var_df_5==1,NA,df[,2])
-    df$SWC_clean6<-ifelse(df$var_df_6==1,NA,df[,2])
-    df$SWC_clean<-ifelse(df$row>10299,df$SWC_clean5,df$SWC_clean6)
-  
-
+    df$SWC_clean<-ifelse(df$QC_5==1,NA,df[,2])
+    df$SWC_clean6<-ifelse(df$QC_6==1,NA,df[,2])
+    
+    df$SWC_clean<-ifelse(df$row<T_Pmax ,df$SWC_clean6,df[,2])
+    df$SWC_clean<-ifelse(df$row<4000,NA,df$SWC_clean)  #df$row<4000
+    df$SWC_clean<-ifelse(df$row>3254 & df$row<3277,  NA,df$SWC_clean)
+    
+    df$SWC_clean<-ifelse(df$row>15000 ,df$SWC_clean6,df$SWC_clean)#df$SWC_clean
+    df$SWC_clean<-ifelse(df$row>16158 & df$row<16226,df$SWC_clean5,df$SWC_clean)#df$SWC_clean
+    
+    df$SWC_clean<-ifelse(df$QC_6==1,NA,df[,2])
+    df$SWC_clean<-ifelse(df$row>2169 & df$row<2249 & df$SWC_clean<=0.17,NA,df$SWC_clean)
+    df$SWC_clean<-ifelse(df$row>16030 & df$row<16038,NA,df$SWC_clean)
+    
+    df$SWC_clean<-ifelse(df$row>15570 & df$row<15850 & df$SWC_clean<0.25,NA,df$SWC_clean)
+    
 #####BAD PROBE:
     df$SWC_clean<-rep(NA,nrow(df))
+    
+#####MANUAL CLEANING:
+    min(df[df$row>T_Pmax & df$QC_6>0,4])
+    
+    df[df$row== 11000),1]
+    abline(v= df[df$row==10949,1],col="green")
+    df$SWC_clean<-ifelse(df$row>12230 & df$row<15375,NA,df[,2])  #11037
+    
+#######   When maximum daily values are ok but there is noise
+
+#adding doy to df
+df$doy<-timestampDF$doy
+
+#Computing daily maximum SWC
+SWC_MAX<-aggregate(df[,2], by=list(df$doy),FUN=max, na.rm=TRUE) 
+
+
+#adding a column on df for SWC MAX
+for (i in 1:nrow(df)){
+df$SWC_MAX[i]<-SWC_MAX[SWC_MAX$Group.1==df$doy[i],2]
+                     }
+#cleaning one period                     
+df$SWC_clean<-ifelse(df$QC_5==1 & df$SWC_clean<df$SWC_MAX ,NA,df$SWC_clean)
+df$SWC_clean<-ifelse(df$row>13500 & df$row<13630 & df$SWC_clean<0.21 ,NA,df$SWC_clean)
+     
 
 #To check clean SWC
 
 par(mfrow=c(3,1))
 
 Tsubset<-c(1:nrow(df))  #For all data
-Tsubset<-c(9600:13007)  #For monsoon
+Tsubset<-c(12000:14000)  #For monsoon
 Tsubset<-c(5000:7000) #For spring
 Tsubset<-c(1:5000) #For beginning of year
 Tsubset<-c(15000:17519) #For the year's end
 
 plot(df[Tsubset,1],df[Tsubset,2],ylim=c(0,0.5),main=names(df)[2])
 par(new=TRUE)
-plot(df[Tsubset,1],df$SWC_clean[Tsubset],ylim=c(0,0.5),main=names(df)[2],col="brown")
+#plot(df[Tsubset,1],df$QC_dif[Tsubset],,ylim=c(0,0.5),main=names(df)[2],col="pink")
 #par(new=TRUE)
-#plot(df[Tsubset,1],df$SWC_clean[Tsubset],,ylim=c(0,0.5),main=names(df)[2],col="pink")
+#plot(df[Tsubset,1],rawData[Tsubset,probe],ylim=c(0,0.5),main=names(df)[2],col='orange')
+par(new=TRUE)   
+plot(df[Tsubset,1],df$SWC_clean[Tsubset],ylim=c(0,0.5),main=names(df)[2],col="brown")
 par(new=TRUE)
-plot(df[Tsubset,1],fluxAll[Tsubset,ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[2:nrow(fluxAll),ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
+
+plot(df[Tsubset,1],fluxAll[Tsubset,ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[,ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
 
 
 #######################################
 ### Saving the clean SWC probe by probe
+#OUTPUT2<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS/SWC_PJG_2010_REFINED_30min.csv",header=T,sep = ",",dec=".")
 
 names(df)[2]
 
-OUTPUT2$x37WC_P2_30_AVGH<-df$SWC_clean     #Change here manually the name of the probe
+OUTPUT2$WC_O2_5_AVG<-df$SWC_clean     #Change here manually the name of the probe
 
 head(OUTPUT2)
 
 
 #################################
 #Saving the filtered_Stage2 data:
+#PJC:
 setwd('C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS')
-
 write.csv(OUTPUT2,paste(OUTPUT2_name,'.CSV',sep=''),row.names=TRUE)
-#write.csv(OUTPUT2,paste('PJC_11_Filtered2SWC_WS50','.CSV',sep=','),row.names=TRUE)
 
 
+
+#PJG:
+#setwd('C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS')
+#write.csv(OUTPUT2,paste(OUTPUT2_name,'.CSV',sep=''),row.names=TRUE)
+
+#aDDING TIME COLUMNS
+
+OUTPUT2<-cbind(timestampDF,OUTPUT2[,2:ncol(OUTPUT2)])
+
+#PJG:
+setwd('C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS')
+write.csv(OUTPUT2,paste(OUTPUT2_name,'.CSV',sep=''),row.names=TRUE)
 
 ###################################################
 #Accounting the new gaps (After refining30min SWC):  
   
-OUTPUT2<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/SWC_PJC_2011_REFINED_30min.csv",header=T,sep = ",",dec=".")
-OUTPUT2<-OUTPUT2[,2:ncol(OUTPUT2)]
+#PJC:
+#OUTPUT2<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/SWC_PJC_2010_REFINED_30min.csv",header=T,sep = ",",dec=".")
+#OUTPUT2<-OUTPUT2[,2:ncol(OUTPUT2)]
+
+#PJG:
+OUTPUT2<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS/SWC_PJG_2009_REFINED_30min.csv",header=T,sep = ",",dec=".")
+
+
+
 OUTPUT2_sel<-OUTPUT2[,6:ncol(OUTPUT2)]
 
 
@@ -621,10 +831,16 @@ for( i in grep("WC",names(OUTPUT2_sel))){
     
 GAP_account[4,2:ncol(GAP_account)]<- Gap_3
 
+GAP_account
+
+#PJC:
 setwd('C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS')
 write.csv(GAP_account,paste(GAP_name,'.CSV',sep=''),row.names=TRUE)
 
-
+#PJG:
+#setwd('C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS')
+#write.csv(GAP_account,paste(GAP_name,'.CSV',sep=''),row.names=TRUE)
+           
             #########################################################
             #charging data after second filtering stage if necessary:
             #########################################################
@@ -633,18 +849,18 @@ write.csv(GAP_account,paste(GAP_name,'.CSV',sep=''),row.names=TRUE)
             rawData<-rawData[2:17520,]            #only for 2011 data because:all soil_Year_complete datasets begin doy 1 00:30 and finish doy 365 or 366 at 23:30
             rawData <- rawData[, c(1, grep("WC", names(rawData)))]
 
-            OUTPUT<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/SWC_PJC_2011_Median_filtered_30min.csv",header=T,sep = ",",dec=".")
+            OUTPUT<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/SWC_PJC_2013_Median_filtered_30min.csv",header=T,sep = ",",dec=".")
             OUTPUT<-OUTPUT[,2:ncol(OUTPUT)]
 
-            OUTPUT2<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/SWC_PJC_2011_REFINED_30min.csv",header=T,sep = ",",dec=".")
+            OUTPUT2<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/SWC_PJC_2013_REFINED_30min.csv",header=T,sep = ",",dec=".")
             OUTPUT2<-OUTPUT2[,2:ncol(OUTPUT2)]
-            OUTPUT2_sel<-OUTPUT2[,6:ncol(OUTPUT2)]
+            OUTPUT2_sel<-OUTPUT2[,7:ncol(OUTPUT2)]
 
             #GAP_account<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/SWC_GAPS_PJC_2011_30min.csv",header=T,sep = ",",dec=".")
-            GAP_account<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/SGAPS_SWC_PJC_2011.csv",header=T,sep = ",",dec=".")
+            GAP_account<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/GAPS_SWC_PJC_2013.csv",header=T,sep = ",",dec=".")
             GAP_account<-GAP_account[,2:ncol(GAP_account)]
 
-            fluxAll<- read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/Flux_all files/PJ_FLUX_all_2011_Dan.csv",header=T,sep = ",",dec=".")
+            fluxAll<- read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/Flux_all files/PJ_FLUX_all_2010.csv",header=T,sep = ",",dec=".")
 
     
 
@@ -658,8 +874,13 @@ write.csv(GAP_account,paste(GAP_name,'.CSV',sep=''),row.names=TRUE)
 #AUTOMATED LOOP TO SAVE THE diagnostic plots PLOTS
  dev.off()
  
-PLOT2_name                        
-pdf(file = "C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/PlotSWC_PJC_2011_REFINED_30min.pdf")
+PLOT2_name 
+ 
+#PJC                      
+pdf(file = "C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/PlotSWC_PJC_2013_REFINED_30min.pdf")
+
+#PJG                      
+#pdf(file = "C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS/PlotSWC_PJG_2012_REFINED_30min.pdf")
 par(mfrow=c(3,1),mar=c(2, 4, 2, 0.5),oma=c(2,0,2,4))
 
 for( i in 2:ncol(rawData)) {
@@ -668,8 +889,8 @@ plot(timestampDF[,5],rawData[,i],type="l",lwd=2,ylim=c(0,0.5),ylab="SWC",xlab="D
 lines(timestampDF[,5],OUTPUT[,i],type="l",col="red",lwd=2)
 lines(timestampDF[,5],OUTPUT2_sel[,i],type="l",col="green",lwd=2)
 par(new=TRUE)                                                                           #This is to create a secondary axis in the same plot
-plot(timestampDF[,5],fluxAll[2:nrow(fluxAll),ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[2:nrow(fluxAll),ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
-Yincrease<-(max(fluxAll[2:nrow(fluxAll),ncol(fluxAll)],na.rm=T))/4  
+plot(timestampDF[,5],fluxAll[,ncol(fluxAll)],type="h",col="blue",xaxt="n",yaxt="n",xlab="",ylab="",ylim=c(0,max(fluxAll[,ncol(fluxAll)],na.rm=T)))        #This is to include precipitation
+Yincrease<-(max(fluxAll[,ncol(fluxAll)],na.rm=T))/4  
 axis( side=4)
 mtext("Precip",side=4,line=3,cex=0.8)                                                                           #4 means that the rain axis is going to be writen in the right hand of the plot
 legend("topleft",col=c("black","red","green","blue"),lty=1,legend=c("raw SWC","First_Filtered SWC","Second_Filtered SWC","Precipitation"))
@@ -697,15 +918,19 @@ dev.off()
 OUTPUT1_daily_avg<- aggregate(OUTPUT2, by=list(OUTPUT2$doy),FUN=mean, na.rm=TRUE)
 
 fluxAll$doy<-as.integer(fluxAll$jday)
-Daily_rain<-aggregate(fluxAll[2:nrow(fluxAll),(ncol(fluxAll)-1):ncol(fluxAll)], by=list(fluxAll[2:nrow(fluxAll),ncol(fluxAll)]),FUN=sum, na.rm=TRUE)
+Daily_rain<-aggregate(fluxAll[,(ncol(fluxAll)-1):ncol(fluxAll)], by=list(fluxAll[,ncol(fluxAll)]),FUN=sum, na.rm=TRUE)
 
 OUTPUT1_daily_avg$rain_Tot<-Daily_rain$rain_Tot
 OUTPUT1_daily_avg<-OUTPUT1_daily_avg[,2:ncol(OUTPUT1_daily_avg)]
 
-#Saving Daily SWC values
+#Saving Daily SWC values:
+#PJC:
 setwd('C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS')
 write.csv(OUTPUT1_daily_avg,paste(OUTPUT3_name,'.CSV',sep=''),row.names=TRUE)
 
+#PJG:
+#setwd('C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS')
+#write.csv(OUTPUT1_daily_avg,paste(OUTPUT3_name,'.CSV',sep=''),row.names=TRUE)
 
 #########################
 #Accounting the new gaps (daily scale):    
@@ -720,9 +945,15 @@ for( i in grep("WC",names(OUTPUT1_daily_avg_sel))){
     
 GAP_account[5,2:ncol(GAP_account)]<- Gap_4
 
+
+
+#PJC:
 setwd('C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS')
 write.csv(GAP_account,paste(GAP_name,'.CSV',sep=''),row.names=TRUE)
 
+#PJG:
+#setwd('C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS')
+#write.csv(GAP_account,paste(GAP_name,'.CSV',sep=''),row.names=TRUE)
 
 ########################################
 #      Ploting Result 1 THIRD STAGE 
@@ -731,8 +962,12 @@ write.csv(GAP_account,paste(GAP_name,'.CSV',sep=''),row.names=TRUE)
 dev.off()
 
 PLOT3_name
+#PJC:
+pdf(file = "C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/PlotSWC_PJC_2013_REFINED_Daily.pdf")
 
-pdf(file = "C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/PlotSWC_PJC_2011_REFINED_Daily.pdf")
+#PJG:
+#pdf(file = "C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS/PlotSWC_PJG_2012_REFINED_Daily.pdf")
+
 par(mfrow=c(3,1),mar=c(2, 4, 2, 0.5),oma=c(2,0,2,4))
 
 for( i in grep("WC",names(OUTPUT1_daily_avg))) {
@@ -760,8 +995,9 @@ dev.off()
 ######################################################
 
 
-INPUT<-OUTPUT1_daily_avg[,c(4,7:ncol(OUTPUT1_daily_avg))]     #A DATASET only including doy and SWC measurements and rain
-
+INPUT<-OUTPUT1_daily_avg[,c(5,7:ncol(OUTPUT1_daily_avg))]     #A DATASET only including doy and SWC measurements and rain
+head(INPUT)
+   
 
 Gap_start<-rep(NA,nrow(INPUT))
 Gap_end<-rep(NA,nrow(INPUT))
@@ -794,7 +1030,7 @@ for (i in 1:nrow(INPUT)){
                               
 Gap_start2[i]<-ifelse(Gap_id[i]==1,max(Gap_start[1:i],na.rm=T),0)
 Gap_end2[i]<- ifelse(Gap_id[i]==1,min(Gap_end[i:length(Gap_end)],na.rm=T),0)
-Gap_Rain[i]<-ifelse(Gap_id[i]==1,sum(INPUT[Gap_start2[i]:Gap_end2[i],29],na.rm=T),NA)
+Gap_Rain[i]<-ifelse(Gap_id[i]==1,sum(INPUT[Gap_start2[i]:Gap_end2[i],grep("rain_Tot",names(INPUT))],na.rm=T),NA)
                         }
                         
 Gap_pos<- (Gap_start[is.na(Gap_start)!=T]+1)
@@ -812,8 +1048,12 @@ SWC_Gapfilled[,j]<-ifelse(Gap_id==1,SWC_FILLED,INPUT[,j])
                           
 SWC_Gapfilled$rain_Tot<-INPUT$rain_Tot
 
-
+#PJC:
 setwd('C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS')
+write.csv(SWC_Gapfilled,paste(OUTPUT4_name,'.CSV',sep=''),row.names=TRUE)
+
+#PJG:
+setwd('C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS')
 write.csv(SWC_Gapfilled,paste(OUTPUT4_name,'.CSV',sep=''),row.names=TRUE)
 
 ########################################
@@ -825,8 +1065,13 @@ write.csv(SWC_Gapfilled,paste(OUTPUT4_name,'.CSV',sep=''),row.names=TRUE)
  dev.off()
  
 PLOT4_name
+#PJC:
+pdf(file = "C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/PlotSWC_PJC_2013_Refined&Gapfilled_Daily.pdf")     #STICK HERE THE NAME OF plot 3
 
-pdf(file = "C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/PlotSWC_PJC_2011_Refined&Gapfilled_Daily.pdf")     #STICK HERE THE NAME OF plot 3
+#PJG:
+#pdf(file = "C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS/PlotSWC_PJG_2012_Refined&Gapfilled_Daily.pdf")
+
+
 par(mfrow=c(3,1),mar=c(2, 4, 2, 0.5),oma=c(2,0,2,4))
 
 for( i in 2:ncol(rawData)) {
@@ -859,8 +1104,117 @@ for( i in grep("WC",names(SWC_Gapfilled))){
 
    
 GAP_account[6,2:ncol(GAP_account)]<- Gap_5
+
     
+#PJC:
 setwd('C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS')
 write.csv(GAP_account,paste(GAP_name,'.CSV',sep=''),row.names=TRUE)
 
+#PJG:
+setwd('C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS')
+write.csv(GAP_account,paste(GAP_name,'.CSV',sep=''),row.names=TRUE)
+
+
+
+
+
+
+
+
+##############################################################################################
+#
+#INCLUDING AVERAGES BY LOCATION AND DEPTH (DAILY GAP FILLED)
+#
+#############################################################################################
+#PJC:
+
+SWC_PJC<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS/SWC_PJC_2012_Refined&Gapfilled_Daily.csv",header=T,sep = ",",dec=".")
+names(SWC_PJC)
+
+P_5<-c(3,6,9)
+P_10<-c(4,7,10)
+P_30<-c(5,8,11)
+
+J_5<-c(12,15,18)
+J_10<-c(13,16,19)
+J_30<-c(14,17,20)
+
+O_5<-c(21,24,27)
+O_10<-c(22,25,28)
+O_30<-c(23,26,29)
+
+SWC_PJC$P_5<-rowMeans(SWC_PJC[,P_5], na.rm = T)
+SWC_PJC$P_10<-rowMeans(SWC_PJC[,P_10], na.rm = T)
+SWC_PJC$P_30<-rowMeans(SWC_PJC[,P_30], na.rm = T)
+
+SWC_PJC$J_5<-rowMeans(SWC_PJC[,J_5], na.rm = T)
+SWC_PJC$J_10<-rowMeans(SWC_PJC[,J_10], na.rm = T)
+SWC_PJC$J_30<-rowMeans(SWC_PJC[,J_30], na.rm = T)
+
+SWC_PJC$O_5<-rowMeans(SWC_PJC[,O_5], na.rm = T)
+SWC_PJC$O_10<-rowMeans(SWC_PJC[,O_10], na.rm = T)
+SWC_PJC$O_30<-rowMeans(SWC_PJC[,O_30], na.rm = T)
+
+SWC_PJC$P_AVG<-rowMeans(SWC_PJC[,grep("P_",names(SWC_PJC))], na.rm = F)
+SWC_PJC$J_AVG<-rowMeans(SWC_PJC[,grep("J_",names(SWC_PJC))], na.rm = F)
+SWC_PJC$O_AVG<-rowMeans(SWC_PJC[,grep("O_",names(SWC_PJC))], na.rm = F)
+
+SWC_PJC$P_AVG<-rowMeans(SWC_PJC[,grep("P_",names(SWC_PJC))], na.rm = F)
+SWC_PJC$J_AVG<-rowMeans(SWC_PJC[,grep("J_",names(SWC_PJC))], na.rm = F)
+SWC_PJC$O_AVG<-rowMeans(SWC_PJC[,grep("O_",names(SWC_PJC))], na.rm = F)
+
+setwd('C:/Users/Laura Morillas/Documents/data/PJ_control/soil/SWC_FILTERED OUTPUTS')
+write.csv(SWC_PJC,paste(OUTPUT5_name,'.CSV',sep=''),row.names=TRUE)
+
+
+#PJG
+SWC_PJG<-read.csv("C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS/SWC_PJG_2010_Refined&Gapfilled_Daily.csv",sep=",",header=TRUE,dec=".")
+names(SWC_PJG)
+
+#THERE ARE ISSUES IN THE OUTPUT NAMES AT THIS SITE BECAUSE SENSORS ARE NOT ACTUALLY LOCATED AT 5,10 AND 30,as at PJC
+#THEY ARE LOCATED AT 5,10 AND AS MUCH DEEP AS YOU CAN GO ABOVE THE CALICHE LAYER, SO tHIS PART OF THE CODE 
+#TRY TO ACCOUNT OR FIX THOSE CONFUSSIONS AND TRY TO GENERATE DATA COMPARABLE TO pjc SITE. 
+
+P_5<-c(3,6,9)
+P_10<-c(4,7,10)
+P_20<-c(5,8)
+P_30<-c(11) #P3_30 CM IS ACTUALLY LOCATED AT 32.5 CM (ALMOST 30CM)
+
+
+J_5<-c(12,15,18)
+J_10<-c(13,16,19)
+J_20<-c(14,17)
+J_30<-c(20)    #J3_30 CM IS ACTUALLY LOCATED AT 30-35 CM
+
+O_5<-c(21,24,27)
+O_10<-c(22,25,28)
+O_20<-c(23,26)
+O_30<-c(29)   
+
+SWC_PJG$P_5<-rowMeans(SWC_PJG[,P_5], na.rm = T)
+SWC_PJG$P_10<-rowMeans(SWC_PJG[,P_10], na.rm = T)
+SWC_PJG$P_20<-rowMeans(SWC_PJG[,P_20], na.rm = T)
+SWC_PJG$P_30<-SWC_PJG[,P_30]
+
+
+SWC_PJG$J_5<-rowMeans(SWC_PJG[,J_5], na.rm = T)
+SWC_PJG$J_10<-rowMeans(SWC_PJG[,J_10], na.rm = T)
+SWC_PJG$J_20<-rowMeans(SWC_PJG[,J_20], na.rm = T)
+SWC_PJG$J_30<-SWC_PJG[,J_30]
+
+SWC_PJG$O_5<-rowMeans(SWC_PJG[,O_5], na.rm = T)
+SWC_PJG$O_10<-rowMeans(SWC_PJG[,O_10], na.rm = T)
+SWC_PJG$O_20<-rowMeans(SWC_PJG[,O_20], na.rm = T)
+SWC_PJG$O_30<-SWC_PJG[,O_30]
+
+SWC_PJG$P_AVG<-rowMeans(SWC_PJG[, grep("P_",names(SWC_PJG))], na.rm = F)
+SWC_PJG$J_AVG<-rowMeans(SWC_PJG[,grep("J_",names(SWC_PJG))], na.rm = F)
+SWC_PJG$O_AVG<-rowMeans(SWC_PJG[,grep("O_",names(SWC_PJG))], na.rm = F)
+
+SWC_PJG$P_AVG<-rowMeans(SWC_PJG[,grep("P_",names(SWC_PJG))], na.rm = F)
+SWC_PJG$J_AVG<-rowMeans(SWC_PJG[,grep("J_",names(SWC_PJG))], na.rm = F)
+SWC_PJG$O_AVG<-rowMeans(SWC_PJG[,grep("O_",names(SWC_PJG))], na.rm = F)
+
+setwd('C:/Users/Laura Morillas/Documents/data/PJ_guirdled/soil/SWC_FILTERED OUTPUTS')
+write.csv(SWC_PJG,paste(OUTPUT5_name,'.CSV',sep=''),row.names=TRUE)
 
